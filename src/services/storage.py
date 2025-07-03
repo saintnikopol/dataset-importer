@@ -9,7 +9,7 @@ import aiofiles
 import aiohttp
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Union, Optional, AsyncIterator
+from typing import Union, Optional, AsyncIterator, Dict, Any
 from urllib.parse import urlparse
 
 from src.config import settings, is_local_environment

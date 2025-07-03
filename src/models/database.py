@@ -4,37 +4,36 @@ Defines the structure of documents stored in the database.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Annotated
 from bson import ObjectId
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, PlainValidator, WithJsonSchema
 
 
-class PyObjectId(ObjectId):
-    """Custom ObjectId type for Pydantic models."""
-    
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-    
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
+def validate_object_id(v: Any) -> ObjectId:
+    """Validate ObjectId values."""
+    if isinstance(v, ObjectId):
+        return v
+    if isinstance(v, str) and ObjectId.is_valid(v):
         return ObjectId(v)
-    
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    raise ValueError("Invalid ObjectId")
+
+
+# Create the PyObjectId type using Pydantic v2 API
+PyObjectId = Annotated[
+    ObjectId,
+    PlainValidator(validate_object_id),
+    WithJsonSchema({"type": "string"}, mode="serialization"),
+]
 
 
 class Dataset(BaseModel):
     """Database model for datasets collection."""
     
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[PyObjectId] = Field(default_factory=ObjectId, alias="_id")
     name: str = Field(..., description="Dataset name")
     description: Optional[str] = Field(None, description="Dataset description")
     status: str = Field(..., description="Dataset status")
-    created_at: datetime = Field(..., description="Creation timestamp")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
     import_job_id: str = Field(..., description="Reference to import job")
     
@@ -82,7 +81,7 @@ class Dataset(BaseModel):
 class ImportJob(BaseModel):
     """Database model for import_jobs collection."""
     
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[PyObjectId] = Field(default_factory=ObjectId, alias="_id")
     job_id: str = Field(..., description="External job ID (UUID)")
     status: str = Field(..., description="Job status")
     
@@ -93,7 +92,7 @@ class ImportJob(BaseModel):
     request: Dict[str, Any] = Field(..., description="Original import request")
     
     # Timestamps
-    created_at: datetime = Field(..., description="Job creation timestamp")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Job creation timestamp")
     started_at: Optional[datetime] = Field(None, description="Job start timestamp")
     completed_at: Optional[datetime] = Field(None, description="Job completion timestamp")
     estimated_completion: Optional[datetime] = Field(None, description="Estimated completion")
@@ -114,7 +113,7 @@ class ImportJob(BaseModel):
 class Image(BaseModel):
     """Database model for images collection."""
     
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[PyObjectId] = Field(default_factory=ObjectId, alias="_id")
     dataset_id: PyObjectId = Field(..., description="Parent dataset reference")
     
     # Image file info
@@ -133,7 +132,7 @@ class Image(BaseModel):
     annotation_count: int = Field(..., ge=0, description="Number of annotations")
     
     # Processing metadata
-    processed_at: datetime = Field(..., description="Processing timestamp")
+    processed_at: datetime = Field(default_factory=datetime.utcnow, description="Processing timestamp")
     
     @field_validator('annotations')
     @classmethod
