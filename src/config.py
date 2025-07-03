@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Local Development (Celery + Redis)
     redis_url: Optional[str] = None
     
+    # Storage Configuration
+    storage_path: str = "./storage"  # Local storage path for development
+    
     # Production (GCP)
     gcp_project: Optional[str] = None
     storage_bucket: Optional[str] = None
@@ -64,7 +67,8 @@ class Settings(BaseSettings):
     
     model_config = {
         "env_file": ".env",
-        "case_sensitive": False
+        "case_sensitive": False,
+        "extra": "ignore"  # Ignore extra fields instead of raising error
     }
 
 
