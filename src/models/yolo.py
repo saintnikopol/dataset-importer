@@ -4,7 +4,7 @@ Defines the structure of YOLO datasets, annotations, and configuration files.
 """
 
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, field_validator
 import yaml
 from io import StringIO
 
@@ -17,7 +17,8 @@ class YOLOBoundingBox(BaseModel):
     width: float = Field(..., description="Normalized width (0.0-1.0)")
     height: float = Field(..., description="Normalized height (0.0-1.0)")
     
-    @validator('center_x', 'center_y', 'width', 'height')
+    @field_validator('center_x', 'center_y', 'width', 'height')
+    @classmethod
     def validate_normalized_coords(cls, v):
         """Validate that coordinates are normalized between 0.0 and 1.0."""
         if not isinstance(v, (int, float)):
@@ -48,8 +49,8 @@ class YOLOBoundingBox(BaseModel):
             "y2": abs_coords["center_y"] + half_height
         }
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "center_x": 0.5,
                 "center_y": 0.6,
@@ -57,6 +58,7 @@ class YOLOBoundingBox(BaseModel):
                 "height": 0.3
             }
         }
+    }
 
 
 class YOLOAnnotation(BaseModel):
@@ -67,7 +69,8 @@ class YOLOAnnotation(BaseModel):
     bbox: YOLOBoundingBox = Field(..., description="Bounding box coordinates")
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Detection confidence")
     
-    @validator('class_name')
+    @field_validator('class_name')
+    @classmethod
     def validate_class_name(cls, v):
         """Validate class name is not empty."""
         if not v or not v.strip():
@@ -124,10 +127,11 @@ class YOLOConfig(BaseModel):
     nc: int = Field(..., gt=0, description="Number of classes")
     names: List[str] = Field(..., description="Class names")
     
-    @validator('names')
-    def validate_class_names(cls, v, values):
+    @field_validator('names')
+    @classmethod
+    def validate_class_names(cls, v, info):
         """Validate class names match declared count."""
-        nc = values.get('nc', 0)
+        nc = info.data.get('nc', 0)
         if len(v) != nc:
             raise ValueError(f"Number of class names ({len(v)}) must match nc ({nc})")
         
@@ -164,11 +168,11 @@ class YOLOConfig(BaseModel):
     
     def to_yaml(self) -> str:
         """Convert config to YAML format."""
-        data = self.dict(exclude_none=True)
+        data = self.model_dump(exclude_none=True)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "path": "/path/to/dataset",
                 "train": "images/train",
@@ -178,6 +182,7 @@ class YOLOConfig(BaseModel):
                 "names": ["person", "car", "bicycle"]
             }
         }
+    }
 
 
 class YOLODataset(BaseModel):
@@ -190,10 +195,11 @@ class YOLODataset(BaseModel):
         description="Annotations mapped by filename"
     )
     
-    @validator('annotations')
-    def validate_annotations_format(cls, v, values):
+    @field_validator('annotations')
+    @classmethod
+    def validate_annotations_format(cls, v, info):
         """Validate annotation format consistency."""
-        config = values.get('config')
+        config = info.data.get('config')
         if not config:
             return v
         
@@ -277,7 +283,7 @@ class YOLODataset(BaseModel):
             for i, annotation in enumerate(annotations):
                 try:
                     # This will validate the coordinates
-                    annotation.bbox.dict()
+                    annotation.bbox.model_dump()
                 except ValueError as e:
                     invalid_coords.append(f"{filename}[{i}]: {e}")
         

@@ -6,7 +6,7 @@ Defines the structure of documents stored in the database.
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class PyObjectId(ObjectId):
@@ -47,11 +47,11 @@ class Dataset(BaseModel):
     # Cloud Storage paths (NO file data in MongoDB)
     storage: Dict[str, str] = Field(default_factory=dict, description="Storage paths")
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str},
+        "json_schema_extra": {
             "example": {
                 "name": "Traffic Detection Dataset",
                 "description": "Urban traffic detection with 3 classes",
@@ -76,6 +76,7 @@ class Dataset(BaseModel):
                 }
             }
         }
+    }
 
 
 class ImportJob(BaseModel):
@@ -103,10 +104,11 @@ class ImportJob(BaseModel):
     # Error info (populated on failure)
     error: Optional[Dict[str, Any]] = Field(None, description="Error details")
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str}
+    }
 
 
 class Image(BaseModel):
@@ -133,7 +135,8 @@ class Image(BaseModel):
     # Processing metadata
     processed_at: datetime = Field(..., description="Processing timestamp")
     
-    @validator('annotations')
+    @field_validator('annotations')
+    @classmethod
     def validate_annotations(cls, v):
         """Validate annotation format."""
         for annotation in v:
@@ -156,11 +159,11 @@ class Image(BaseModel):
         
         return v
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str},
+        "json_schema_extra": {
             "example": {
                 "dataset_id": "507f1f77bcf86cd799439011",
                 "filename": "traffic_001.jpg",
@@ -184,6 +187,7 @@ class Image(BaseModel):
                 "processed_at": "2025-07-03T10:10:00Z"
             }
         }
+    }
 
 
 # Collection names for database operations

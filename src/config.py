@@ -6,7 +6,8 @@ Handles environment-specific settings and dependency injection.
 import os
 from enum import Enum
 from typing import Optional
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 
 class Environment(str, Enum):
@@ -37,31 +38,34 @@ class Settings(BaseSettings):
     cloud_tasks_queue: Optional[str] = None
     worker_url: Optional[str] = None
     
-    @validator('environment', pre=True)
+    @field_validator('environment', mode='before')
+    @classmethod
     def validate_environment(cls, v):
         """Validate environment value."""
         if isinstance(v, str):
             return Environment(v.lower())
         return v
     
-    @validator('redis_url')
-    def validate_redis_url_for_local(cls, v, values):
+    @field_validator('redis_url')
+    @classmethod
+    def validate_redis_url_for_local(cls, v, info):
         """Ensure Redis URL is provided for local environment."""
-        if values.get('environment') == Environment.LOCAL and not v:
+        if info.data.get('environment') == Environment.LOCAL and not v:
             return "redis://localhost:6379/0"
         return v
     
-    @validator('gcp_project')
-    def validate_gcp_project_for_production(cls, v, values):
+    @field_validator('gcp_project')
+    @classmethod
+    def validate_gcp_project_for_production(cls, v, info):
         """Ensure GCP project is provided for production environment."""
-        if values.get('environment') == Environment.PRODUCTION and not v:
+        if info.data.get('environment') == Environment.PRODUCTION and not v:
             raise ValueError("GCP_PROJECT is required for production environment")
         return v
     
-    class Config:
-        """Pydantic configuration."""
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False
+    }
 
 
 # Global settings instance

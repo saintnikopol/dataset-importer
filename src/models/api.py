@@ -5,7 +5,7 @@ Defines the structure of HTTP requests and responses.
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, HttpUrl, validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 from enum import Enum
 
 
@@ -17,15 +17,16 @@ class ImportRequest(BaseModel):
     annotations_url: HttpUrl = Field(..., description="URL to annotations archive (.zip)")
     images_url: HttpUrl = Field(..., description="URL to images archive (.zip)")
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         """Validate dataset name."""
         if not v.strip():
             raise ValueError('Dataset name cannot be empty')
         return v.strip()
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "name": "Traffic Detection Dataset",
                 "description": "Urban traffic detection with 3 classes",
@@ -34,6 +35,7 @@ class ImportRequest(BaseModel):
                 "images_url": "https://storage.googleapis.com/bucket/images.zip"
             }
         }
+    }
 
 
 class ImportJobData(BaseModel):
@@ -54,8 +56,8 @@ class ImportResponse(BaseModel):
     created_at: datetime = Field(..., description="Job creation timestamp")
     estimated_completion: Optional[datetime] = Field(None, description="Estimated completion time")
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "job_id": "550e8400-e29b-41d4-a716-446655440000",
                 "status": "queued",
@@ -64,6 +66,7 @@ class ImportResponse(BaseModel):
                 "estimated_completion": "2025-07-03T10:30:00Z"
             }
         }
+    }
 
 
 class JobStatus(str, Enum):
@@ -160,8 +163,8 @@ class HealthResponse(BaseModel):
     dependencies: Dict[str, str] = Field(..., description="Dependency health status")
     errors: Optional[List[str]] = Field(None, description="Error messages (if unhealthy)")
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "status": "healthy",
                 "timestamp": "2025-07-03T10:00:00Z",
@@ -173,6 +176,7 @@ class HealthResponse(BaseModel):
                 }
             }
         }
+    }
 
 
 class ErrorResponse(BaseModel):
