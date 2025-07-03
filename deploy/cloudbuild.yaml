@@ -1,0 +1,107 @@
+# Google Cloud Build configuration for YOLO Dataset Management
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-f'
+      - 'deploy/Dockerfile'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/yolo-api:$BUILD_ID'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/yolo-api:latest'
+      - '.'
+
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/yolo-api:$BUILD_ID'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/yolo-api:latest'
+
+  # Deploy to Cloud Run API
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'yolo-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/yolo-api:$BUILD_ID'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - '${_REGION}'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'ENVIRONMENT=production,MONGODB_URL=${_MONGODB_URL},GCP_PROJECT=$PROJECT_ID,STORAGE_BUCKET=${_STORAGE_BUCKET}'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--max-instances'
+      - '100'
+      - '--timeout'
+      - '300'
+
+  # Create/Update Cloud Run Job for Worker
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'replace'
+      - '/dev/stdin'
+    stdin: |
+      apiVersion: run.googleapis.com/v1
+      kind: Job
+      metadata:
+        name: yolo-worker
+        namespace: '$PROJECT_ID'
+        annotations:
+          run.googleapis.com/launch-stage: BETA
+      spec:
+        template:
+          spec:
+            template:
+              spec:
+                timeoutSeconds: 3600
+                containers:
+                - image: gcr.io/$PROJECT_ID/yolo-api:$BUILD_ID
+                  command: ["python", "-m", "src.worker"]
+                  env:
+                  - name: ENVIRONMENT
+                    value: production
+                  - name: MONGODB_URL
+                    value: ${_MONGODB_URL}
+                  - name: GCP_PROJECT
+                    value: $PROJECT_ID
+                  - name: STORAGE_BUCKET
+                    value: ${_STORAGE_BUCKET}
+                  resources:
+                    limits:
+                      cpu: "2"
+                      memory: "4Gi"
+
+# Substitutions for environment-specific values
+substitutions:
+  _REGION: 'us-central1'
+  _MONGODB_URL: 'mongodb+srv://user:pass@cluster.mongodb.net/yolo_datasets'
+  _STORAGE_BUCKET: 'your-yolo-datasets-bucket'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+# Build timeout
+timeout: '1200s'
+
+# Images to be pushed to Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/yolo-api:$BUILD_ID'
+  - 'gcr.io/$PROJECT_ID/yolo-api:latest'

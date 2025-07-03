@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # Main API Service
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=local
+      - MONGODB_URL=mongodb://mongo:27017/yolo_datasets
+      - REDIS_URL=redis://redis:6379/0
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_LEVEL=INFO
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ../src:/app/src
+      - ./fake-gcs:/app/storage
+    networks:
+      - yolo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Background Worker Service
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["celery", "-A", "src.worker:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    environment:
+      - ENVIRONMENT=local
+      - MONGODB_URL=mongodb://mongo:27017/yolo_datasets
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ../src:/app/src
+      - ./fake-gcs:/app/storage
+    networks:
+      - yolo-network
+    restart: unless-stopped
+
+  # MongoDB Database
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=yolo_datasets
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - yolo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Job Queue
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - yolo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Commander (Development UI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - yolo-network
+    profiles:
+      - debug
+    restart: unless-stopped
+
+  # Flower (Celery Monitoring)
+  flower:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["celery", "-A", "src.worker:celery_app", "flower", "--port=5555"]
+    ports:
+      - "5555:5555"
+    environment:
+      - ENVIRONMENT=local
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    networks:
+      - yolo-network
+    profiles:
+      - debug
+    restart: unless-stopped
+
+# Persistent volumes
+volumes:
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Network for service communication
+networks:
+  yolo-network:
+    driver: bridge
