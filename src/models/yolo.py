@@ -1,9 +1,11 @@
+# Updated src/models/yolo.py - Fix YOLOConfig to handle real ultralytics format
+
 """
 YOLO format models and validation.
 Defines the structure of YOLO datasets, annotations, and configuration files.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 import yaml
 from io import StringIO
@@ -118,34 +120,71 @@ class YOLOAnnotation(BaseModel):
 
 
 class YOLOConfig(BaseModel):
-    """YOLO dataset configuration (dataset.yaml)."""
+    """YOLO dataset configuration (dataset.yaml) - Compatible with real Ultralytics format."""
     
     path: Optional[str] = Field(None, description="Dataset root path")
     train: Optional[str] = Field(None, description="Training set path")
     val: Optional[str] = Field(None, description="Validation set path")
     test: Optional[str] = Field(None, description="Test set path")
-    nc: int = Field(..., gt=0, description="Number of classes")
-    names: List[str] = Field(..., description="Class names")
+    
+    # Real ultralytics format uses names as dict, not nc + names list
+    names: Union[List[str], Dict[int, str]] = Field(..., description="Class names (list or dict)")
+    
+    # Computed property for number of classes
+    @property
+    def nc(self) -> int:
+        """Number of classes (computed from names)."""
+        if isinstance(self.names, dict):
+            return len(self.names)
+        return len(self.names)
+    
+    @property
+    def class_names(self) -> List[str]:
+        """Get class names as a list."""
+        if isinstance(self.names, dict):
+            # Convert dict to sorted list by key
+            max_key = max(self.names.keys()) if self.names else -1
+            result = [""] * (max_key + 1)
+            for idx, name in self.names.items():
+                result[idx] = name
+            return result
+        return self.names
     
     @field_validator('names')
     @classmethod
-    def validate_class_names(cls, v, info):
-        """Validate class names match declared count."""
-        nc = info.data.get('nc', 0)
-        if len(v) != nc:
-            raise ValueError(f"Number of class names ({len(v)}) must match nc ({nc})")
-        
-        # Check for empty or duplicate names
-        clean_names = []
-        for name in v:
-            if not name or not name.strip():
-                raise ValueError("Class names cannot be empty")
-            clean_name = name.strip()
-            if clean_name in clean_names:
-                raise ValueError(f"Duplicate class name: {clean_name}")
-            clean_names.append(clean_name)
-        
-        return clean_names
+    def validate_names(cls, v):
+        """Validate class names format."""
+        if isinstance(v, dict):
+            # Validate dict format (ultralytics standard)
+            if not v:
+                raise ValueError("Names dictionary cannot be empty")
+            
+            # Check all keys are integers
+            for key in v.keys():
+                if not isinstance(key, int):
+                    raise ValueError(f"All keys in names dict must be integers, got {type(key)}")
+                if key < 0:
+                    raise ValueError(f"Class indices must be non-negative, got {key}")
+            
+            # Check all values are non-empty strings
+            for key, name in v.items():
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError(f"Class name for index {key} must be a non-empty string")
+            
+            return v
+            
+        elif isinstance(v, list):
+            # Validate list format (legacy)
+            if not v:
+                raise ValueError("Names list cannot be empty")
+            
+            for i, name in enumerate(v):
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError(f"Class name at index {i} must be a non-empty string")
+            
+            return v
+        else:
+            raise ValueError("Names must be either a list of strings or a dict mapping int -> str")
     
     @classmethod
     def from_yaml(cls, yaml_content: str) -> 'YOLOConfig':
@@ -159,8 +198,6 @@ class YOLOConfig(BaseModel):
             raise ValueError("YAML content must be a dictionary")
         
         # Validate required fields
-        if 'nc' not in data:
-            raise ValueError("Missing required field: nc")
         if 'names' not in data:
             raise ValueError("Missing required field: names")
         
@@ -178,8 +215,11 @@ class YOLOConfig(BaseModel):
                 "train": "images/train",
                 "val": "images/val",
                 "test": "images/test",
-                "nc": 3,
-                "names": ["person", "car", "bicycle"]
+                "names": {
+                    0: "person",
+                    1: "car", 
+                    2: "bicycle"
+                }
             }
         }
     }
@@ -203,7 +243,7 @@ class YOLODataset(BaseModel):
         if not config:
             return v
         
-        class_names = config.names
+        class_names = config.class_names
         for filename, annotations in v.items():
             for annotation in annotations:
                 if annotation.class_id >= len(class_names):
@@ -227,7 +267,8 @@ class YOLODataset(BaseModel):
         total_annotations = sum(len(annotations) for annotations in self.annotations.values())
         
         # Class distribution
-        class_counts = {name: 0 for name in self.config.names}
+        class_names = self.config.class_names
+        class_counts = {name: 0 for name in class_names}
         for annotations in self.annotations.values():
             for annotation in annotations:
                 class_counts[annotation.class_name] += 1
@@ -255,7 +296,7 @@ class YOLODataset(BaseModel):
         return {
             "total_images": total_images,
             "total_annotations": total_annotations,
-            "classes_count": len(self.config.names),
+            "classes_count": self.config.nc,
             "avg_annotations_per_image": total_annotations / total_images if total_images > 0 else 0,
             "class_distribution": class_counts,
             "image_dimensions": image_stats
@@ -291,3 +332,24 @@ class YOLODataset(BaseModel):
             issues.append(f"Invalid coordinates in {len(invalid_coords)} annotations")
         
         return issues
+
+
+# Helper functions for coordinate conversion
+def convert_yolo_to_absolute(bbox: YOLOBoundingBox, image_width: int, image_height: int) -> Dict[str, int]:
+    """Convert YOLO normalized coordinates to absolute coordinates."""
+    return bbox.to_absolute(image_width, image_height)
+
+
+def convert_absolute_to_yolo(coords: Dict[str, int], image_width: int, image_height: int) -> YOLOBoundingBox:
+    """Convert absolute coordinates to YOLO normalized coordinates."""
+    center_x = (coords["x"] + coords["width"] / 2) / image_width
+    center_y = (coords["y"] + coords["height"] / 2) / image_height
+    width = coords["width"] / image_width
+    height = coords["height"] / image_height
+    
+    return YOLOBoundingBox(
+        center_x=center_x,
+        center_y=center_y,
+        width=width,
+        height=height
+    )
