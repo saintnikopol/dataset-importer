@@ -9,11 +9,10 @@ import uuid
 from datetime import datetime, timedelta
 
 from src.models.api import ImportRequest, ImportResponse, JobStatusResponse
-from src.services.job_queue import get_job_queue
+from src.services.job_queue import get_job_queue, JobQueue
 from src.services.database import get_database, DatabaseService
 from src.utils.logging import logger
 from src.utils.exceptions import DatabaseError, ProcessingError
-
 
 router = APIRouter()
 
@@ -21,7 +20,8 @@ router = APIRouter()
 @router.post("/import", response_model=ImportResponse, status_code=202)
 async def import_dataset(
     request: ImportRequest,
-    db: DatabaseService = Depends(get_database)
+    db: DatabaseService = Depends(get_database),
+    job_queue: JobQueue = Depends(get_job_queue)
 ) -> Dict[str, Any]:
     """
     Start asynchronous YOLO dataset import.
@@ -53,7 +53,7 @@ async def import_dataset(
         await db.create_import_job(job_data)
         
         # Enqueue background processing job
-        job_queue = get_job_queue()
+
         await job_queue.enqueue_import_job(job_id, request.model_dump(mode="json"))
         
         # Return response
