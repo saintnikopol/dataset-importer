@@ -13,7 +13,7 @@ RESTful API for managing YOLO format datasets with support for 100GB+ scale impo
 ## 📥 Import Operations
 
 ### Start Dataset Import
-Initiate asynchronous import of YOLO dataset from remote URLs.
+Initiate asynchronous import of YOLO dataset from remote URL.
 
 ```http
 POST /datasets/import
@@ -25,8 +25,7 @@ POST /datasets/import
   "name": "Traffic Detection Dataset",
   "description": "Urban traffic detection with 3 classes",
   "yolo_config_url": "https://storage.googleapis.com/bucket/dataset.yaml",
-  "annotations_url": "https://storage.googleapis.com/bucket/labels.zip",
-  "images_url": "https://storage.googleapis.com/bucket/images.zip"
+  "dataset_url": "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco8.zip"
 }
 ```
 
@@ -37,7 +36,7 @@ POST /datasets/import
   "status": "queued",
   "message": "Import job started successfully",
   "created_at": "2025-07-03T10:00:00Z",
-  "estimated_completion": "2025-07-03T10:30:00Z"
+  "estimated_completion": "2025-07-03T10:20:00Z"
 }
 ```
 
@@ -45,9 +44,9 @@ POST /datasets/import
 ```json
 {
   "error": "validation_error",
-  "message": "Invalid YOLO config URL",
+  "message": "Invalid YOLO dataset URL",
   "details": {
-    "field": "yolo_config_url",
+    "field": "dataset_url",
     "reason": "URL not accessible"
   },
   "timestamp": "2025-07-03T10:00:00Z"
@@ -72,12 +71,13 @@ GET /datasets/import/{job_id}/status
   "progress": {
     "percentage": 65,
     "current_step": "parsing_annotations",
-    "steps_completed": ["download_files", "validate_format", "extract_archives"],
-    "current_step_progress": "6500/10000 annotations processed"
+    "steps_completed": ["download_config", "download_dataset", "extract_archive"],
+    "current_step_progress": "6500/10000 annotations processed",
+    "total_steps": 6
   },
   "dataset_id": null,
   "started_at": "2025-07-03T10:00:00Z",
-  "estimated_completion": "2025-07-03T10:25:00Z"
+  "estimated_completion": "2025-07-03T10:15:00Z"
 }
 ```
 
@@ -86,7 +86,7 @@ GET /datasets/import/{job_id}/status
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "completed",
-  "progress": {"percentage": 100},
+  "progress": {"percentage": 100, "total_steps": 6},
   "dataset_id": "ds_abc123def456",
   "started_at": "2025-07-03T10:00:00Z",
   "completed_at": "2025-07-03T10:15:00Z",
@@ -107,8 +107,8 @@ GET /datasets/import/{job_id}/status
   "progress": {"percentage": 30},
   "error": {
     "code": "invalid_yolo_format",
-    "message": "YOLO label files contain invalid bounding box coordinates",
-    "details": "Files: image_001.txt, image_045.txt have coordinates > 1.0"
+    "message": "YOLO dataset archive missing required directories",
+    "details": "Archive must contain 'images/' and 'labels/' directories"
   },
   "started_at": "2025-07-03T10:00:00Z",
   "failed_at": "2025-07-03T10:05:00Z"
@@ -368,62 +368,6 @@ All endpoints use consistent error response structure:
 }
 ```
 
-### Common Error Codes
-
-| Code | Description | Status |
-|------|-------------|---------|
-| `validation_error` | Invalid request parameters | 400 |
-| `dataset_not_found` | Dataset ID doesn't exist | 404 |
-| `job_not_found` | Import job ID doesn't exist | 404 |
-| `rate_limit_exceeded` | Too many requests | 429 |
-| `internal_server_error` | Unexpected server error | 500 |
-| `service_unavailable` | Dependency unavailable | 503 |
-
-### Status Code Summary
-
-| Endpoint | Success | Common Errors |
-|----------|---------|---------------|
-| `POST /datasets/import` | 202 | 400 (invalid URLs), 422 (validation) |
-| `GET /datasets/import/{job_id}/status` | 200 | 404 (job not found) |
-| `GET /datasets` | 200 | 400 (invalid params) |
-| `GET /datasets/{id}` | 200 | 404 (not found) |
-| `GET /datasets/{id}/images` | 200 | 404 (dataset not found) |
-| `GET /health` | 200 | 503 (unhealthy) |
-
-## 🔄 Rate Limiting (Future)
-
-When authentication is implemented:
-- **Default**: 1000 requests per hour per API key
-- **Import operations**: 10 concurrent imports per API key
-- **Headers**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-
-## 📝 YOLO Format Specification
-
-### Supported File Types
-- **Images**: `.jpg`, `.jpeg`, `.png`
-- **Labels**: `.txt` files with space-separated values
-- **Config**: `.yaml` files with class definitions
-- **Archives**: `.zip` files containing structured dataset
-
-### Label Format
-Each `.txt` file contains one line per bounding box:
-```
-class_id center_x center_y width height
-```
-- All coordinates normalized to 0.0-1.0 range
-- `center_x`, `center_y`: Bounding box center coordinates
-- `width`, `height`: Bounding box dimensions
-
-### Config Format (dataset.yaml)
-```yaml
-path: /path/to/dataset
-train: images/train
-val: images/val
-test: images/test
-nc: 3
-names: ['person', 'car', 'bicycle']
-```
-
 ## 🧪 Testing Examples
 
 ### cURL Examples
@@ -432,10 +376,10 @@ names: ['person', 'car', 'bicycle']
 curl -X POST http://localhost:8000/datasets/import \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Test Dataset",
-    "yolo_config_url": "https://example.com/dataset.yaml",
-    "annotations_url": "https://example.com/labels.zip",
-    "images_url": "https://example.com/images.zip"
+    "name": "COCO8 Sample Dataset",
+    "description": "Sample COCO dataset with 8 images",
+    "yolo_config_url": "https://raw.githubusercontent.com/ultralytics/ultralytics/main/ultralytics/cfg/datasets/coco8.yaml",
+    "dataset_url": "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco8.zip"
   }'
 
 # Check job status
@@ -460,9 +404,9 @@ async def test_api():
             "http://localhost:8000/datasets/import",
             json={
                 "name": "Test Dataset",
+                "description": "Standard YOLO dataset test",
                 "yolo_config_url": "https://example.com/dataset.yaml",
-                "annotations_url": "https://example.com/labels.zip",
-                "images_url": "https://example.com/images.zip"
+                "dataset_url": "https://example.com/complete-dataset.zip"
             }
         )
         job_id = response.json()["job_id"]
@@ -475,6 +419,91 @@ async def test_api():
 
 asyncio.run(test_api())
 ```
+
+## 📝 YOLO Format Specification
+
+### Supported Dataset Structure
+The API expects a single ZIP archive containing a complete YOLO dataset with this structure:
+```
+dataset.zip
+├── images/
+│   ├── train/
+│   │   ├── image1.jpg
+│   │   └── image2.jpg
+│   └── val/
+│       └── image3.jpg
+└── labels/
+    ├── train/
+    │   ├── image1.txt
+    │   └── image2.txt
+    └── val/
+        └── image3.txt
+```
+
+### Supported File Types
+- **Images**: `.jpg`, `.jpeg`, `.png`
+- **Labels**: `.txt` files with space-separated values
+- **Config**: `.yaml` files with class definitions
+- **Dataset Archive**: Single `.zip` file containing complete YOLO dataset with standard structure:
+  - `images/` directory with train/val subdirectories
+  - `labels/` directory with train/val subdirectories
+
+### Label Format
+Each `.txt` file contains one line per bounding box:
+```
+class_id center_x center_y width height
+```
+- All coordinates normalized to 0.0-1.0 range
+- `center_x`, `center_y`: Bounding box center coordinates
+- `width`, `height`: Bounding box dimensions
+
+### Config Format (dataset.yaml)
+```yaml
+path: /path/to/dataset
+train: images/train
+val: images/val
+test: images/test
+nc: 3
+names: ['person', 'car', 'bicycle']
+```
+
+## 🔄 Processing Pipeline
+
+The dataset import process follows these steps:
+
+1. **Download Config** (10%): Download and validate YOLO config file
+2. **Download Dataset** (30%): Download complete dataset archive
+3. **Parse Annotations** (60%): Extract and validate YOLO labels
+4. **Process Images** (80%): Extract image metadata and validate format
+5. **Store Data** (90%): Save to database and cloud storage
+6. **Complete** (100%): Finalize job and generate summary
+
+## ❌ Error Handling
+
+### Common Error Codes
+
+| Code | Description | Status |
+|------|-------------|---------|
+| `validation_error` | Invalid request parameters | 400 |
+| `invalid_yolo_format` | Dataset doesn't follow YOLO structure | 400 |
+| `dataset_not_found` | Dataset ID doesn't exist | 404 |
+| `job_not_found` | Import job ID doesn't exist | 404 |
+| `archive_invalid` | ZIP archive is corrupted or invalid | 400 |
+| `missing_directories` | Archive missing required images/ or labels/ | 400 |
+| `rate_limit_exceeded` | Too many requests | 429 |
+| `internal_server_error` | Unexpected server error | 500 |
+| `service_unavailable` | Dependency unavailable | 503 |
+
+### Status Code Summary
+
+| Endpoint | Success | Common Errors |
+|----------|---------|---------------|
+| `POST /datasets/import` | 202 | 400 (invalid URLs), 422 (validation) |
+| `GET /datasets/import/{job_id}/status` | 200 | 404 (job not found) |
+| `GET /datasets` | 200 | 400 (invalid params) |
+| `GET /datasets/{id}` | 200 | 404 (not found) |
+| `GET /datasets/{id}/images` | 200 | 404 (dataset not found) |
+| `GET /health` | 200 | 503 (unhealthy) |
 
 ## 📚 Additional Resources
 

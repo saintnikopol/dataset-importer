@@ -30,8 +30,8 @@ class DatasetProcessor:
         
     async def process_dataset_import(self, job_id: str, data: Dict[str, Any]) -> None:
         """
-        Main processing function for YOLO dataset import.
-        Handles the complete pipeline from download to storage.
+        Main processing function for YOLO dataset import with single archive.
+        Processes complete YOLO dataset from single ZIP archive.
         """
         logger.info(f"Starting dataset processing for job {job_id}")
         
@@ -40,31 +40,23 @@ class DatasetProcessor:
             await self._update_progress(job_id, 10, "downloading_config", "Downloading YOLO config file")
             config = await self._download_and_parse_config(data["config_url"])
             
-            # Step 2: Download and extract annotations
-            await self._update_progress(job_id, 30, "downloading_annotations", "Downloading annotations archive")
-            annotations_data = await self._download_and_extract_archive(
-                data["annotations_url"], "annotations"
-            )
+            # Step 2: Download and extract complete dataset
+            await self._update_progress(job_id, 30, "downloading_dataset", "Downloading YOLO dataset archive")
+            dataset_dir = await self._download_and_extract_dataset(data["dataset_url"], job_id)
             
-            # Step 3: Download and extract images
-            await self._update_progress(job_id, 50, "downloading_images", "Downloading images archive")
-            images_data = await self._download_and_extract_archive(
-                data["images_url"], "images"
-            )
+            # Step 3: Parse and validate YOLO annotations
+            await self._update_progress(job_id, 60, "parsing_annotations", "Parsing YOLO annotations")
+            annotations = await self._parse_yolo_annotations(dataset_dir / "labels", config)
             
-            # Step 4: Parse and validate YOLO annotations
-            await self._update_progress(job_id, 70, "parsing_annotations", "Parsing YOLO annotations")
-            annotations = await self._parse_yolo_annotations(annotations_data, config)
+            # Step 4: Process and validate images
+            await self._update_progress(job_id, 80, "processing_images", "Processing images")
+            images = await self._process_images(dataset_dir / "images", annotations)
             
-            # Step 5: Process and validate images
-            await self._update_progress(job_id, 85, "processing_images", "Processing images")
-            images = await self._process_images(images_data, annotations)
-            
-            # Step 6: Store dataset in database and storage
-            await self._update_progress(job_id, 95, "storing_data", "Storing dataset")
+            # Step 5: Store dataset in database and storage
+            await self._update_progress(job_id, 90, "storing_data", "Storing dataset")
             dataset_id = await self._store_dataset(job_id, data, config, images, annotations)
             
-            # Step 7: Complete
+            # Step 6: Complete
             await self._complete_job(job_id, dataset_id, config, images, annotations)
             
             logger.info(f"Successfully completed dataset processing for job {job_id}")
@@ -90,14 +82,14 @@ class DatasetProcessor:
         except Exception as e:
             raise ProcessingError(f"Failed to download/parse YOLO config: {e}")
     
-    async def _download_and_extract_archive(self, url: str, content_type: str) -> Path:
-        """Download and extract ZIP archive to temporary directory."""
+    async def _download_and_extract_dataset(self, dataset_url: str, job_id: str) -> Path:
+        """Download and extract complete YOLO dataset archive."""
         try:
-            logger.info(f"Downloading {content_type} archive from: {url}")
-            archive_data = await self.storage.download_file(url)
+            logger.info(f"Downloading YOLO dataset archive from: {dataset_url}")
+            archive_data = await self.storage.download_file(dataset_url)
             
-            # Create temporary directory
-            temp_dir = Path(tempfile.mkdtemp(prefix=f"yolo_{content_type}_"))
+            # Create job-specific temporary directory
+            temp_dir = Path(tempfile.mkdtemp(prefix=f"yolo_dataset_{job_id}_"))
             
             # Save archive to temp file
             archive_path = temp_dir / "archive.zip"
@@ -110,21 +102,26 @@ class DatasetProcessor:
             # Remove the archive file
             archive_path.unlink()
             
-            logger.info(f"Extracted {content_type} archive to: {temp_dir}")
+            logger.info(f"Extracted YOLO dataset archive to: {temp_dir}")
             return temp_dir
             
         except zipfile.BadZipFile as e:
-            raise ProcessingError(f"Invalid ZIP archive for {content_type}: {e}")
+            raise ProcessingError(f"Invalid ZIP archive for dataset: {e}")
         except Exception as e:
-            raise ProcessingError(f"Failed to download/extract {content_type} archive: {e}")
+            raise ProcessingError(f"Failed to download/extract dataset archive: {e}")
     
-    async def _parse_yolo_annotations(self, annotations_dir: Path, config: YOLOConfig) -> Dict[str, List[YOLOAnnotation]]:
-        """Parse YOLO annotation files from directory."""
+    async def _parse_yolo_annotations(self, labels_dir: Path, config: YOLOConfig) -> Dict[str, List[YOLOAnnotation]]:
+        """Parse YOLO annotation files from labels directory."""
         annotations = {}
-        label_files = list(annotations_dir.rglob("*.txt"))
+        
+        if not labels_dir.exists():
+            raise ValidationError(f"Labels directory not found: {labels_dir}")
+            
+        # Find all .txt files in labels directory and subdirectories
+        label_files = list(labels_dir.rglob("*.txt"))
         
         if not label_files:
-            raise ValidationError("No YOLO label files (.txt) found in annotations archive")
+            raise ValidationError("No YOLO label files (.txt) found in labels directory")
         
         logger.info(f"Parsing {len(label_files)} annotation files")
         
@@ -158,17 +155,21 @@ class DatasetProcessor:
         return annotations
     
     async def _process_images(self, images_dir: Path, annotations: Dict[str, List[YOLOAnnotation]]) -> List[Dict[str, Any]]:
-        """Process image files and extract metadata."""
+        """Process image files from images directory and extract metadata."""
         images = []
         image_files = []
         
+        if not images_dir.exists():
+            raise ValidationError(f"Images directory not found: {images_dir}")
+        
         # Find all image files
-        for ext in ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff"]:
+        image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff"]
+        for ext in image_extensions:
             image_files.extend(list(images_dir.rglob(ext)))
             image_files.extend(list(images_dir.rglob(ext.upper())))
         
         if not image_files:
-            raise ValidationError("No image files found in images archive")
+            raise ValidationError("No image files found in images directory")
         
         logger.info(f"Processing {len(image_files)} image files")
         
@@ -222,7 +223,7 @@ class DatasetProcessor:
                 images.append(image_record)
                 
             except Exception as e:
-                logger.warning(f"Failed to process image {image_file}: {e}")
+                logger.warning(f"Failed to process image {image_file.name}: {e}")
                 continue
         
         logger.info(f"Successfully processed {len(images)} images")

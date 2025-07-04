@@ -43,11 +43,11 @@ async def import_dataset(
                 "percentage": 0,
                 "current_step": "queued",
                 "steps_completed": [],
-                "total_steps": 5
+                "total_steps": 6
             },
             "request": request.model_dump(mode="json"),
             "created_at": datetime.utcnow(),
-            "estimated_completion": datetime.utcnow() + timedelta(minutes=30)
+            "estimated_completion": datetime.utcnow() + timedelta(minutes=20)
         }
         
         await db.create_import_job(job_data)

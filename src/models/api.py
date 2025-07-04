@@ -14,8 +14,7 @@ class ImportRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Dataset name")
     description: Optional[str] = Field(None, max_length=1000, description="Dataset description")
     yolo_config_url: HttpUrl = Field(..., description="URL to YOLO config file (dataset.yaml)")
-    annotations_url: HttpUrl = Field(..., description="URL to annotations archive (.zip)")
-    images_url: HttpUrl = Field(..., description="URL to images archive (.zip)")
+    dataset_url: HttpUrl = Field(..., description="URL to complete YOLO dataset archive (.zip)")
     
     @field_validator('name')
     @classmethod
@@ -31,8 +30,7 @@ class ImportRequest(BaseModel):
                 "name": "Traffic Detection Dataset",
                 "description": "Urban traffic detection with 3 classes",
                 "yolo_config_url": "https://storage.googleapis.com/bucket/dataset.yaml",
-                "annotations_url": "https://storage.googleapis.com/bucket/labels.zip",
-                "images_url": "https://storage.googleapis.com/bucket/images.zip"
+                "dataset_url": "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco8.zip"
             }
         }
     }
@@ -44,8 +42,7 @@ class ImportJobData(BaseModel):
     name: str = Field(..., description="Dataset name")
     description: Optional[str] = Field(None, description="Dataset description")
     config_url: str = Field(..., description="YOLO config file URL")
-    annotations_url: str = Field(..., description="Annotations archive URL")
-    images_url: str = Field(..., description="Images archive URL")
+    dataset_url: str = Field(..., description="Complete YOLO dataset archive URL")
 
 
 class ImportResponse(BaseModel):
@@ -83,7 +80,7 @@ class JobProgress(BaseModel):
     current_step: str = Field(..., description="Current processing step")
     steps_completed: List[str] = Field(default_factory=list, description="Completed steps")
     current_step_progress: Optional[str] = Field(None, description="Progress within current step")
-    total_steps: int = Field(default=5, description="Total number of processing steps")
+    total_steps: int = Field(default=6, description="Total number of processing steps")
 
 
 class JobStatusResponse(BaseModel):

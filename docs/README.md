@@ -52,8 +52,7 @@ curl -X POST http://localhost:8000/datasets/import \
   -d '{
     "name": "Test Dataset",
     "yolo_config_url": "https://example.com/dataset.yaml",
-    "annotations_url": "https://example.com/labels.zip",
-    "images_url": "https://example.com/images.zip"
+    "dataset_url": "https://example.com/dataset.zip"
   }'
 
 # Check import status

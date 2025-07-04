@@ -58,17 +58,15 @@ class LocalJobQueue(JobQueue):
         try:
             logger.info(f"Enqueueing import job {job_id} to Celery")
             
-            # # Enqueue the task
-            # Need to map keys like production does
+            # Map API format to internal processing format
             mapped_data = {
                 "name": data.get("name"),
                 "description": data.get("description"), 
-                "config_url": data.get("yolo_config_url"),      # ← Add key mapping
-                "annotations_url": data.get("annotations_url"),
-                "images_url": data.get("images_url")
+                "config_url": data.get("yolo_config_url"),
+                "dataset_url": data.get("dataset_url")
             }
             
-            result = self.task.delay(job_id, mapped_data)  # ← Use mapped data
+            result = self.task.delay(job_id, mapped_data)
             logger.info(f"Successfully enqueued job {job_id} with task ID: {result.id}")
             
         except Exception as e:
@@ -133,14 +131,13 @@ class ProductionJobQueue(JobQueue):
         try:
             logger.info(f"Enqueueing import job {job_id} to Cloud Tasks")
             
-            # Prepare task payload
+            # Prepare task payload with mapped data
             payload = {
                 "job_id": job_id,
                 "name": data.get("name"),
                 "description": data.get("description"),
                 "config_url": data.get("yolo_config_url"),
-                "annotations_url": data.get("annotations_url"),
-                "images_url": data.get("images_url")
+                "dataset_url": data.get("dataset_url")
             }
             
             # Create Cloud Tasks task
