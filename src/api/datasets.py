@@ -20,7 +20,7 @@ async def list_datasets(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("created_at", description="Sort field"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     status: Optional[str] = Query(None, description="Filter by status"),
     db: DatabaseService = Depends(get_database)
 ) -> Dict[str, Any]:
@@ -104,7 +104,7 @@ async def list_dataset_images(
     class_filter: Optional[str] = Query(None, description="Filter by class name"),
     has_annotations: Optional[bool] = Query(None, description="Filter by annotation presence"),
     sort_by: str = Query("filename", description="Sort field"),
-    sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$", description="Sort order"),
     db: DatabaseService = Depends(get_database)
 ) -> Dict[str, Any]:
     """
