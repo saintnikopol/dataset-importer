@@ -1,5 +1,5 @@
 """
-YOLO dataset processing service.
+YOLO dataset processing service - FIXED VERSION
 Handles downloading, parsing, and storing YOLO format datasets.
 """
 
@@ -44,13 +44,13 @@ class DatasetProcessor:
             await self._update_progress(job_id, 30, "downloading_dataset", "Downloading YOLO dataset archive")
             dataset_dir = await self._download_and_extract_dataset(data["dataset_url"], job_id)
             
-            # Step 3: Parse and validate YOLO annotations
+            # Step 3: Find and parse YOLO annotations
             await self._update_progress(job_id, 60, "parsing_annotations", "Parsing YOLO annotations")
-            annotations = await self._parse_yolo_annotations(dataset_dir / "labels", config)
+            annotations = await self._find_and_parse_annotations(dataset_dir, config)
             
             # Step 4: Process and validate images
             await self._update_progress(job_id, 80, "processing_images", "Processing images")
-            images = await self._process_images(dataset_dir / "images", annotations)
+            images = await self._find_and_process_images(dataset_dir, annotations)
             
             # Step 5: Store dataset in database and storage
             await self._update_progress(job_id, 90, "storing_data", "Storing dataset")
@@ -76,7 +76,7 @@ class DatasetProcessor:
             config_text = config_data.decode('utf-8')
             config = YOLOConfig.from_yaml(config_text)
             
-            logger.info(f"Parsed YOLO config: {config.nc} classes - {config.names}")
+            logger.info(f"Parsed YOLO config: {config.nc} classes - {config.class_names}")
             return config
             
         except Exception as e:
@@ -110,20 +110,99 @@ class DatasetProcessor:
         except Exception as e:
             raise ProcessingError(f"Failed to download/extract dataset archive: {e}")
     
-    async def _parse_yolo_annotations(self, labels_dir: Path, config: YOLOConfig) -> Dict[str, List[YOLOAnnotation]]:
-        """Parse YOLO annotation files from labels directory."""
+    def _find_dataset_root(self, extracted_dir: Path) -> Path:
+        """
+        Find the actual dataset root directory within the extracted archive.
+        Handles various archive structures automatically.
+        """
+        # List all directories in the extracted path
+        subdirs = [d for d in extracted_dir.iterdir() if d.is_dir()]
+        
+        # Check if labels/ and images/ are directly in extracted_dir
+        if (extracted_dir / "labels").exists() and (extracted_dir / "images").exists():
+            logger.info(f"Dataset root found at: {extracted_dir}")
+            return extracted_dir
+        
+        # Look for labels/ and images/ in subdirectories (common case)
+        for subdir in subdirs:
+            if (subdir / "labels").exists() and (subdir / "images").exists():
+                logger.info(f"Dataset root found at: {subdir}")
+                return subdir
+        
+        # Look for any directory that has labels/ subdirectory
+        for subdir in subdirs:
+            labels_dirs = list(subdir.rglob("labels"))
+            if labels_dirs:
+                potential_root = labels_dirs[0].parent
+                if (potential_root / "images").exists() or list(potential_root.rglob("images")):
+                    logger.info(f"Dataset root found at: {potential_root}")
+                    return potential_root
+        
+        # Fallback: look deeper for any labels directory
+        all_labels_dirs = list(extracted_dir.rglob("labels"))
+        if all_labels_dirs:
+            # Take the first labels directory and assume its parent is the dataset root
+            potential_root = all_labels_dirs[0].parent
+            logger.info(f"Dataset root found at: {potential_root} (fallback)")
+            return potential_root
+        
+        # If we still can't find it, return the extracted directory and let the error handling deal with it
+        logger.warning(f"Could not find dataset root structure in {extracted_dir}")
+        return extracted_dir
+    
+    async def _find_and_parse_annotations(self, extracted_dir: Path, config: YOLOConfig) -> Dict[str, List[YOLOAnnotation]]:
+        """Find and parse YOLO annotation files from the dataset."""
+        # Find the actual dataset root
+        dataset_root = self._find_dataset_root(extracted_dir)
+        
+        # Try multiple possible labels directory locations
+        possible_labels_dirs = [
+            dataset_root / "labels",
+            dataset_root / "train" / "labels",
+            dataset_root / "val" / "labels",
+        ]
+        
+        # Also search recursively for labels directories
+        possible_labels_dirs.extend(list(dataset_root.rglob("labels")))
+        
         annotations = {}
         
-        if not labels_dir.exists():
-            raise ValidationError(f"Labels directory not found: {labels_dir}")
+        for labels_dir in possible_labels_dirs:
+            if labels_dir.exists() and labels_dir.is_dir():
+                logger.info(f"Processing labels from: {labels_dir}")
+                dir_annotations = await self._parse_yolo_annotations(labels_dir, config)
+                annotations.update(dir_annotations)
+        
+        if not annotations:
+            # List directory structure for debugging
+            logger.error(f"Directory structure of {dataset_root}:")
+            for root, dirs, files in os.walk(dataset_root):
+                level = root.replace(str(dataset_root), '').count(os.sep)
+                indent = ' ' * 2 * level
+                logger.error(f"{indent}{os.path.basename(root)}/")
+                subindent = ' ' * 2 * (level + 1)
+                for file in files[:10]:  # Show only first 10 files
+                    logger.error(f"{subindent}{file}")
+                if len(files) > 10:
+                    logger.error(f"{subindent}... and {len(files) - 10} more files")
             
+            raise ValidationError(f"No YOLO annotation files found in dataset. Searched directories: {[str(d) for d in possible_labels_dirs]}")
+        
+        logger.info(f"Successfully parsed annotations for {len(annotations)} images")
+        return annotations
+    
+    async def _parse_yolo_annotations(self, labels_dir: Path, config: YOLOConfig) -> Dict[str, List[YOLOAnnotation]]:
+        """Parse YOLO annotation files from a specific labels directory."""
+        annotations = {}
+        
         # Find all .txt files in labels directory and subdirectories
         label_files = list(labels_dir.rglob("*.txt"))
         
         if not label_files:
-            raise ValidationError("No YOLO label files (.txt) found in labels directory")
+            logger.warning(f"No .txt annotation files found in {labels_dir}")
+            return annotations
         
-        logger.info(f"Parsing {len(label_files)} annotation files")
+        logger.info(f"Parsing {len(label_files)} annotation files from {labels_dir}")
         
         for label_file in label_files:
             try:
@@ -139,7 +218,7 @@ class DatasetProcessor:
                             continue
                         
                         try:
-                            annotation = YOLOAnnotation.from_yolo_line(line, config.names)
+                            annotation = YOLOAnnotation.from_yolo_line(line, config.class_names)
                             file_annotations.append(annotation)
                         except ValueError as e:
                             logger.warning(f"Invalid annotation in {label_file}:{line_num}: {e}")
@@ -151,27 +230,52 @@ class DatasetProcessor:
                 logger.warning(f"Failed to parse annotation file {label_file}: {e}")
                 continue
         
-        logger.info(f"Successfully parsed annotations for {len(annotations)} images")
         return annotations
     
-    async def _process_images(self, images_dir: Path, annotations: Dict[str, List[YOLOAnnotation]]) -> List[Dict[str, Any]]:
-        """Process image files from images directory and extract metadata."""
+    async def _find_and_process_images(self, extracted_dir: Path, annotations: Dict[str, List[YOLOAnnotation]]) -> List[Dict[str, Any]]:
+        """Find and process image files from the dataset."""
+        # Find the actual dataset root
+        dataset_root = self._find_dataset_root(extracted_dir)
+        
+        # Try multiple possible images directory locations
+        possible_images_dirs = [
+            dataset_root / "images",
+            dataset_root / "train" / "images",
+            dataset_root / "val" / "images",
+        ]
+        
+        # Also search recursively for images directories
+        possible_images_dirs.extend(list(dataset_root.rglob("images")))
+        
         images = []
-        image_files = []
-        
-        if not images_dir.exists():
-            raise ValidationError(f"Images directory not found: {images_dir}")
-        
-        # Find all image files
         image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff"]
-        for ext in image_extensions:
-            image_files.extend(list(images_dir.rglob(ext)))
-            image_files.extend(list(images_dir.rglob(ext.upper())))
         
-        if not image_files:
-            raise ValidationError("No image files found in images directory")
+        for images_dir in possible_images_dirs:
+            if images_dir.exists() and images_dir.is_dir():
+                logger.info(f"Processing images from: {images_dir}")
+                
+                # Find all image files
+                image_files = []
+                for ext in image_extensions:
+                    image_files.extend(list(images_dir.rglob(ext)))
+                    image_files.extend(list(images_dir.rglob(ext.upper())))
+                
+                if image_files:
+                    dir_images = await self._process_images_from_directory(images_dir, image_files, annotations)
+                    images.extend(dir_images)
         
-        logger.info(f"Processing {len(image_files)} image files")
+        if not images:
+            raise ValidationError(f"No image files found in dataset. Searched directories: {[str(d) for d in possible_images_dirs]}")
+        
+        logger.info(f"Successfully processed {len(images)} images")
+        return images
+    
+    async def _process_images_from_directory(self, images_dir: Path, image_files: List[Path], 
+                                           annotations: Dict[str, List[YOLOAnnotation]]) -> List[Dict[str, Any]]:
+        """Process image files from a specific directory."""
+        images = []
+        
+        logger.info(f"Processing {len(image_files)} image files from {images_dir}")
         
         for image_file in image_files:
             try:
@@ -190,7 +294,8 @@ class DatasetProcessor:
                 image_annotations = annotations.get(image_name, [])
                 
                 # Store image file in storage
-                image_path = f"datasets/{image_name}/{image_file.name}"
+                relative_path = image_file.relative_to(images_dir)
+                image_path = f"datasets/{image_name}/{relative_path}"
                 with open(image_file, 'rb') as f:
                     image_data = f.read()
                 
@@ -226,7 +331,6 @@ class DatasetProcessor:
                 logger.warning(f"Failed to process image {image_file.name}: {e}")
                 continue
         
-        logger.info(f"Successfully processed {len(images)} images")
         return images
     
     async def _store_dataset(self, job_id: str, request_data: Dict[str, Any], 
@@ -240,7 +344,7 @@ class DatasetProcessor:
         total_size = sum(img["file_size_bytes"] for img in images)
         
         # Calculate class counts
-        class_counts = {name: 0 for name in config.names}
+        class_counts = {name: 0 for name in config.class_names}
         for image in images:
             for annotation in image["annotations"]:
                 class_counts[annotation["class_name"]] += 1
@@ -256,13 +360,13 @@ class DatasetProcessor:
             "stats": {
                 "total_images": total_images,
                 "total_annotations": total_annotations,
-                "classes_count": len(config.names),
+                "classes_count": len(config.class_names),
                 "dataset_size_bytes": total_size,
                 "avg_annotations_per_image": total_annotations / total_images if total_images > 0 else 0
             },
             "classes": [
-                {"id": i, "name": name, "count": class_counts[name]}
-                for i, name in enumerate(config.names)
+                {"id": i, "name": name, "count": class_counts.get(name, 0)}
+                for i, name in enumerate(config.class_names)
             ],
             "storage": {
                 "images_path": f"datasets/{job_id}/images/",
@@ -302,7 +406,7 @@ class DatasetProcessor:
         summary = {
             "total_images": len(images),
             "total_annotations": sum(len(anns) for anns in annotations.values()),
-            "classes": config.names,
+            "classes": config.class_names,
             "dataset_size_bytes": sum(img["file_size_bytes"] for img in images)
         }
         
