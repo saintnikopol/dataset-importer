@@ -35,7 +35,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    command: ["celery", "-A", "src.worker:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    command: ["celery", "-A", "src.worker:celery_app", "worker", "--loglevel=info", "--queues=celery,yolo_import", "--concurrency=2"]
     environment:
       - ENVIRONMENT=local
       - MONGODB_URL=mongodb://mongo:27017/yolo_datasets

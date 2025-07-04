@@ -1,3 +1,5 @@
+# Fix for src/worker.py - Add database initialization for Celery workers
+
 """
 Background worker for processing YOLO dataset imports.
 Supports both local development (Celery) and production (Cloud Run Jobs).
@@ -15,14 +17,28 @@ from src.services.database import init_database, get_database
 from src.utils.logging import setup_logging, logger
 from src.utils.exceptions import ProcessingError
 
-
 # Initialize logging
 setup_logging()
 
+# Global database initialization flag
+_database_initialized = False
+
+async def ensure_database_initialized():
+    """Ensure database is initialized for worker processes."""
+    global _database_initialized
+    if not _database_initialized:
+        try:
+            await init_database()
+            _database_initialized = True
+            logger.info("Database initialized in worker process")
+        except Exception as e:
+            logger.error(f"Failed to initialize database in worker: {e}")
+            raise
 
 if settings.environment == Environment.LOCAL:
     # Local development: Celery + Redis
     from celery import Celery
+    from celery.signals import worker_process_init
     
     celery_app = Celery(
         "yolo_worker",
@@ -42,17 +58,41 @@ if settings.environment == Environment.LOCAL:
         }
     )
     
+    @worker_process_init.connect
+    def init_worker_process(**kwargs):
+        """Initialize database when worker process starts."""
+        logger.info("Worker process starting - initializing database...")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(ensure_database_initialized())
+            logger.info("Worker process database initialization complete")
+        except Exception as e:
+            logger.error(f"Worker process database initialization failed: {e}")
+            raise
+        finally:
+            # Don't close the loop - worker needs it
+            pass
+    
     @celery_app.task(bind=True, name="src.worker.process_import_task")
     def process_import_task(self, job_id: str, data: Dict[str, Any]):
         """Celery task for processing dataset import."""
         try:
             logger.info(f"Starting import task {job_id}")
-            asyncio.run(process_dataset_import(job_id, data))
+            
+            # Ensure database is initialized in this worker process
+            loop = asyncio.get_event_loop()
+            if not _database_initialized:
+                loop.run_until_complete(ensure_database_initialized())
+            
+            # Process the import
+            loop.run_until_complete(process_dataset_import(job_id, data))
             logger.info(f"Completed import task {job_id}")
         except Exception as e:
             logger.error(f"Import task {job_id} failed: {e}", exc_info=True)
             # Update job status to failed
-            asyncio.run(mark_job_failed(job_id, str(e)))
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(mark_job_failed(job_id, str(e)))
             raise
 
 else:
