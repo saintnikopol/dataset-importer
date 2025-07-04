@@ -1,30 +1,22 @@
 """
-Essential test configuration for YOLO Dataset Management.
-Simplified, focused fixtures that match actual implementation.
+Fixed test configuration for YOLO Dataset Management.
+Provides proper dependency injection and database mocking.
 """
 
-import asyncio
 import pytest
 import tempfile
 import shutil
 from typing import Dict, Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from pathlib import Path
-
-import pytest_asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
-from fastapi.testclient import TestClient
-from httpx import AsyncClient
-
-from src.main import app
-from src.config import Settings, Environment
-from src.services.database import init_database, close_database
+from datetime import datetime
 
 
-# Core Configuration
+# Essential Test Configuration
 @pytest.fixture(scope="session")
-def test_settings() -> Settings:
+def test_settings():
     """Test configuration matching actual Settings model."""
+    from src.config import Settings, Environment
     return Settings(
         environment=Environment.LOCAL,
         mongodb_url="mongodb://localhost:27017/test_yolo_datasets",
@@ -34,17 +26,7 @@ def test_settings() -> Settings:
     )
 
 
-# Database Fixtures
-@pytest.fixture(scope="session")
-async def test_db_client(test_settings: Settings) -> AsyncClient:
-    """Test database client with proper initialization."""
-    # Override settings for testing
-    with patch('src.config.settings', test_settings):
-        await init_database()
-        yield
-        await close_database()
-
-
+# Temporary Directory for File Operations  
 @pytest.fixture
 def temp_dir() -> Path:
     """Temporary directory for file operations."""
@@ -53,15 +35,7 @@ def temp_dir() -> Path:
     shutil.rmtree(temp_path, ignore_errors=True)
 
 
-# API Client Fixtures  
-@pytest.fixture
-async def async_client() -> AsyncClient:
-    """Async test client for API testing."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
-
-
-# Data Factories (Simple)
+# Sample Data Fixtures
 @pytest.fixture
 def sample_import_request_data() -> Dict[str, Any]:
     """Sample import request data matching actual API."""
@@ -95,25 +69,96 @@ def sample_yolo_annotation_lines() -> str:
     return "0 0.5 0.5 0.3 0.4\n1 0.2 0.3 0.1 0.2\n0 0.8 0.7 0.15 0.25"
 
 
-# Mock Services (Simple)
 @pytest.fixture
-def mock_storage_service():
-    """Mock storage service with essential methods."""
-    mock = AsyncMock()
-    mock.upload_file.return_value = "test/path/file.jpg"
-    mock.download_file.return_value = b"test-content"
-    return mock
+def sample_dataset_data() -> Dict[str, Any]:
+    """Sample dataset response data."""
+    return {
+        "id": "507f1f77bcf86cd799439011",
+        "name": "Test Traffic Dataset",
+        "description": "Traffic detection with 3 classes",
+        "status": "completed",
+        "created_at": datetime.now(),
+        "completed_at": datetime.now(),
+        "import_job_id": "550e8400-e29b-41d4-a716-446655440000",
+        "stats": {
+            "total_images": 100,
+            "total_annotations": 250,
+            "classes_count": 3,
+            "dataset_size_bytes": 1024000,
+            "avg_annotations_per_image": 2.5
+        },
+        "classes": [
+            {"id": 0, "name": "car", "count": 150},
+            {"id": 1, "name": "truck", "count": 75},
+            {"id": 2, "name": "bus", "count": 25}
+        ],
+        "storage": {
+            "images_path": "gs://bucket/datasets/test/images/",
+            "labels_path": "gs://bucket/datasets/test/labels/"
+        }
+    }
 
 
 @pytest.fixture
-def mock_job_queue():
-    """Mock job queue with essential methods."""
-    mock = AsyncMock()
-    mock.enqueue_import_job.return_value = None
-    return mock
+def sample_image_data() -> list:
+    """Sample image data with annotations."""
+    return [
+        {
+            "id": "img_001",
+            "filename": "traffic_001.jpg",
+            "width": 1920,
+            "height": 1080,
+            "file_size_bytes": 245760,
+            "image_url": "gs://bucket/datasets/test/images/traffic_001.jpg",
+            "annotations": [
+                {
+                    "class_id": 0,
+                    "class_name": "car",
+                    "bbox": {
+                        "center_x": 0.5,
+                        "center_y": 0.6,
+                        "width": 0.1,
+                        "height": 0.3
+                    }
+                }
+            ],
+            "annotation_count": 1
+        },
+        {
+            "id": "img_002",
+            "filename": "traffic_002.jpg",
+            "width": 1920,
+            "height": 1080,
+            "file_size_bytes": 312000,
+            "image_url": "gs://bucket/datasets/test/images/traffic_002.jpg",
+            "annotations": [
+                {
+                    "class_id": 0,
+                    "class_name": "car",
+                    "bbox": {
+                        "center_x": 0.3,
+                        "center_y": 0.4,
+                        "width": 0.2,
+                        "height": 0.15
+                    }
+                },
+                {
+                    "class_id": 1,
+                    "class_name": "truck",
+                    "bbox": {
+                        "center_x": 0.7,
+                        "center_y": 0.5,
+                        "width": 0.25,
+                        "height": 0.4
+                    }
+                }
+            ],
+            "annotation_count": 2
+        }
+    ]
 
 
-# Database Cleanup
+# Database Cleanup - Simple Version
 @pytest.fixture(autouse=True)
 async def cleanup_test_data():
     """Clean up test data after each test."""
