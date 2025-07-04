@@ -1,0 +1,125 @@
+(venv) user@User-Device yolo-dataset-management % pytest tests/ --cov=src
+========================================================================================== test session starts ==========================================================================================
+platform darwin -- Python 3.11.7, pytest-7.4.3, pluggy-1.6.0 -- /Users/user/git/coding/ultralitics/yolo-dataset-management/venv/bin/python3.11
+cachedir: .pytest_cache
+rootdir: /Users/user/git/coding/ultralitics/yolo-dataset-management
+configfile: pyproject.toml
+plugins: asyncio-0.21.1, cov-6.2.1, mock-3.14.1, anyio-3.7.1
+asyncio: mode=Mode.AUTO
+collected 76 items
+
+tests/test_api.py::TestDatasetImport::test_import_valid_request_all_fields PASSED                                                                                                                 [  1%]
+tests/test_api.py::TestDatasetImport::test_import_valid_request_optional_description PASSED                                                                                                       [  2%]
+tests/test_api.py::TestDatasetImport::test_import_invalid_empty_name PASSED                                                                                                                       [  3%]
+tests/test_api.py::TestDatasetImport::test_import_invalid_urls PASSED                                                                                                                             [  5%]
+tests/test_api.py::TestDatasetImport::test_import_missing_required_fields PASSED                                                                                                                  [  6%]
+tests/test_api.py::TestDatasetImport::test_import_database_error PASSED                                                                                                                           [  7%]
+tests/test_api.py::TestJobStatus::test_get_job_status_queued PASSED                                                                                                                               [  9%]
+tests/test_api.py::TestJobStatus::test_get_job_status_processing PASSED                                                                                                                           [ 10%]
+tests/test_api.py::TestJobStatus::test_get_job_status_completed PASSED                                                                                                                            [ 11%]
+tests/test_api.py::TestJobStatus::test_get_job_status_failed PASSED                                                                                                                               [ 13%]
+tests/test_api.py::TestJobStatus::test_get_job_status_not_found PASSED                                                                                                                            [ 14%]
+tests/test_api.py::TestJobStatus::test_get_job_status_invalid_uuid PASSED                                                                                                                         [ 15%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_empty PASSED                                                                                                                            [ 17%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_with_data PASSED                                                                                                                        [ 18%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_pagination_parameters[1-20] PASSED                                                                                                      [ 19%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_pagination_parameters[2-10] PASSED                                                                                                      [ 21%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_pagination_parameters[1-50] PASSED                                                                                                      [ 22%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_pagination_parameters[3-5] PASSED                                                                                                       [ 23%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_status_filtering[completed] PASSED                                                                                                      [ 25%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_status_filtering[processing] PASSED                                                                                                     [ 26%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_status_filtering[failed] PASSED                                                                                                         [ 27%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_status_filtering[queued] PASSED                                                                                                         [ 28%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_sorting[created_at-desc] PASSED                                                                                                         [ 30%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_sorting[created_at-asc] PASSED                                                                                                          [ 31%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_sorting[name-asc] PASSED                                                                                                                [ 32%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_sorting[name-desc] PASSED                                                                                                               [ 34%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_invalid_pagination PASSED                                                                                                               [ 35%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_invalid_sort_order PASSED                                                                                                               [ 36%]
+tests/test_api.py::TestDatasetListing::test_list_datasets_database_error PASSED                                                                                                                   [ 38%]
+tests/test_api.py::TestDatasetDetails::test_get_dataset_valid_id PASSED                                                                                                                           [ 39%]
+tests/test_api.py::TestDatasetDetails::test_get_dataset_not_found PASSED                                                                                                                          [ 40%]
+tests/test_api.py::TestDatasetDetails::test_get_dataset_invalid_object_id PASSED                                                                                                                  [ 42%]
+tests/test_api.py::TestDatasetDetails::test_get_dataset_database_error PASSED                                                                                                                     [ 43%]
+tests/test_api.py::TestDatasetImages::test_list_images_valid_dataset PASSED                                                                                                                       [ 44%]
+tests/test_api.py::TestDatasetImages::test_list_images_empty_dataset PASSED                                                                                                                       [ 46%]
+tests/test_api.py::TestDatasetImages::test_list_images_pagination PASSED                                                                                                                          [ 47%]
+tests/test_api.py::TestDatasetImages::test_list_images_class_filtering[car] PASSED                                                                                                                [ 48%]
+tests/test_api.py::TestDatasetImages::test_list_images_class_filtering[truck] PASSED                                                                                                              [ 50%]
+tests/test_api.py::TestDatasetImages::test_list_images_class_filtering[bus] PASSED                                                                                                                [ 51%]
+tests/test_api.py::TestDatasetImages::test_list_images_annotation_filtering[True] PASSED                                                                                                          [ 52%]
+tests/test_api.py::TestDatasetImages::test_list_images_annotation_filtering[False] PASSED                                                                                                         [ 53%]
+tests/test_api.py::TestDatasetImages::test_list_images_sorting[filename-asc] PASSED                                                                                                               [ 55%]
+tests/test_api.py::TestDatasetImages::test_list_images_sorting[filename-desc] PASSED                                                                                                              [ 56%]
+tests/test_api.py::TestDatasetImages::test_list_images_sorting[annotation_count-asc] PASSED                                                                                                       [ 57%]
+tests/test_api.py::TestDatasetImages::test_list_images_sorting[annotation_count-desc] PASSED                                                                                                      [ 59%]
+tests/test_api.py::TestDatasetImages::test_list_images_dataset_not_found PASSED                                                                                                                   [ 60%]
+tests/test_api.py::TestDatasetImages::test_list_images_invalid_pagination PASSED                                                                                                                  [ 61%]
+tests/test_api.py::TestHealthCheck::test_health_check_healthy PASSED                                                                                                                              [ 63%]
+tests/test_api.py::TestHealthCheck::test_health_check_unhealthy_dependencies PASSED                                                                                                               [ 64%]
+tests/test_api.py::TestHealthCheck::test_health_check_exception_handling PASSED                                                                                                                   [ 65%]
+tests/test_api.py::TestConcurrentRequests::test_concurrent_health_checks PASSED                                                                                                                   [ 67%]
+tests/test_api.py::TestConcurrentRequests::test_concurrent_dataset_listing PASSED                                                                                                                 [ 68%]
+tests/test_api.py::TestErrorResponses::test_404_error_format PASSED                                                                                                                               [ 69%]
+tests/test_api.py::TestErrorResponses::test_422_validation_error_format PASSED                                                                                                                    [ 71%]
+tests/test_api.py::TestErrorResponses::test_500_error_format PASSED                                                                                                                               [ 72%]
+tests/test_api.py::TestRootEndpoint::test_root_endpoint PASSED                                                                                                                                    [ 73%]
+tests/test_models.py::TestAPIModels::test_import_request_valid PASSED                                                                                                                             [ 75%]
+tests/test_models.py::TestAPIModels::test_import_request_validation_failures PASSED                                                                                                               [ 76%]
+tests/test_models.py::TestAPIModels::test_import_request_optional_description PASSED                                                                                                              [ 77%]
+tests/test_models.py::TestAPIModels::test_import_response_structure PASSED                                                                                                                        [ 78%]
+tests/test_models.py::TestDatabaseModels::test_dataset_model_creation PASSED                                                                                                                      [ 80%]
+tests/test_models.py::TestDatabaseModels::test_dataset_with_object_id PASSED                                                                                                                      [ 81%]
+tests/test_models.py::TestDatabaseModels::test_import_job_model PASSED                                                                                                                            [ 82%]
+tests/test_models.py::TestDatabaseModels::test_image_model_creation PASSED                                                                                                                        [ 84%]
+tests/test_models.py::TestDatabaseModels::test_image_annotation_validation PASSED                                                                                                                 [ 85%]
+tests/test_models.py::TestYOLOModels::test_yolo_bounding_box_valid PASSED                                                                                                                         [ 86%]
+tests/test_models.py::TestYOLOModels::test_yolo_bounding_box_validation PASSED                                                                                                                    [ 88%]
+tests/test_models.py::TestYOLOModels::test_yolo_config_ultralytics_format PASSED                                                                                                                  [ 89%]
+tests/test_models.py::TestYOLOModels::test_yolo_config_from_yaml PASSED                                                                                                                           [ 90%]
+tests/test_models.py::TestYOLOModels::test_yolo_config_validation_errors PASSED                                                                                                                   [ 92%]
+tests/test_models.py::TestYOLOModels::test_yolo_annotation_from_line PASSED                                                                                                                       [ 93%]
+tests/test_models.py::TestYOLOModels::test_yolo_annotation_parsing_errors PASSED                                                                                                                  [ 94%]
+tests/test_models.py::TestYOLOModels::test_coordinate_conversion_methods PASSED                                                                                                                   [ 96%]
+tests/test_models.py::TestCriticalEdgeCases::test_boundary_coordinates PASSED                                                                                                                     [ 97%]
+tests/test_models.py::TestCriticalEdgeCases::test_large_dataset_stats PASSED                                                                                                                      [ 98%]
+tests/test_models.py::TestCriticalEdgeCases::test_mongodb_objectid_serialization PASSED                                                                                                           [100%]
+
+=========================================================================================== warnings summary ============================================================================================
+venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:252
+venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:252
+venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:252
+venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:252
+venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:252
+  /Users/user/git/coding/ultralitics/yolo-dataset-management/venv/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:252: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.5/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================================================================ tests coverage =============================================================================================
+___________________________________________________________________________ coverage: platform darwin, python 3.11.7-final-0 ____________________________________________________________________________
+
+Name                                Stmts   Miss  Cover
+-------------------------------------------------------
+src/__init__.py                         2      0   100%
+src/api/__init__.py                     4      0   100%
+src/api/datasets.py                    66      9    86%
+src/api/health.py                      39      4    90%
+src/api/import_jobs.py                 55     11    80%
+src/config.py                          45      4    91%
+src/main.py                            46     18    61%
+src/models/__init__.py                  4      0   100%
+src/models/api.py                     101      1    99%
+src/models/database.py                 68      5    93%
+src/models/yolo.py                    177     75    58%
+src/services/__init__.py                5      0   100%
+src/services/database.py              179    152    15%
+src/services/dataset_processor.py     204    176    14%
+src/services/job_queue.py              98     74    24%
+src/services/storage.py               208    164    21%
+src/utils/__init__.py                   3      0   100%
+src/utils/exceptions.py                75     42    44%
+src/utils/logging.py                   69     52    25%
+src/worker.py                          92     92     0%
+-------------------------------------------------------
+TOTAL                                1540    879    43%
+==================================================================================== 76 passed, 5 warnings in 3.95s =====================================================================================
