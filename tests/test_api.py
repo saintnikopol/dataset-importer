@@ -1,5 +1,5 @@
 """
-Comprehensive API tests for YOLO Dataset Management System.
+Comprehensive API tests for YOLO Dataset Management System - FIXED VERSION.
 
 Tests all FastAPI endpoints including dataset import, listing, image management,
 and health checks with proper async testing, mocking, and error handling.
@@ -21,33 +21,6 @@ from src.models.database import Dataset, ImportJob, Image
 from src.utils.exceptions import DatabaseError, ProcessingError
 from src.services.database import get_database
 from src.services.job_queue import get_job_queue
-
-
-@pytest.fixture
-async def async_client():
-    """Async HTTP client for API testing with proper dependency mocking."""
-    # Mock all the database dependencies globally for this test session
-    with patch('src.services.database._database_service') as mock_db_service, \
-         patch('src.services.database.get_database') as mock_get_db, \
-         patch('src.services.job_queue.get_job_queue') as mock_get_queue, \
-         patch('src.api.health.health_check_database') as mock_db_health, \
-         patch('src.api.health.health_check_queue') as mock_queue_health, \
-         patch('src.api.health.health_check_storage') as mock_storage_health:
-        
-        # Set up default mock behaviors
-        mock_db_service_instance = AsyncMock()
-        mock_get_db.return_value = mock_db_service_instance
-        
-        mock_queue_instance = AsyncMock()
-        mock_get_queue.return_value = mock_queue_instance
-        
-        # Set up health check mocks
-        mock_db_health.return_value = {"status": "healthy"}
-        mock_queue_health.return_value = {"status": "healthy"}
-        mock_storage_health.return_value = {"status": "healthy"}
-        
-        async with AsyncClient(app=app, base_url="http://test") as ac:
-            yield ac
 
 
 @pytest.fixture
@@ -81,7 +54,10 @@ def mock_database_service():
             "has_next": False,
             "has_prev": False
         },
-        "filters_applied": {}
+        "filters_applied": {
+            "class_filter": None,
+            "has_annotations": None
+        }
     }
     
     return mock
@@ -95,7 +71,6 @@ def mock_job_queue():
     return mock
 
 
-# Override the async_client to use dependency injection properly
 @pytest.fixture
 async def test_client(mock_database_service, mock_job_queue):
     """Test client with properly mocked dependencies."""
@@ -131,7 +106,7 @@ def sample_import_request_data():
 
 @pytest.fixture
 def sample_dataset_data():
-    """Sample dataset response data."""
+    """Sample dataset response data with correct structure."""
     return {
         "id": "507f1f77bcf86cd799439011",
         "name": "Test Traffic Dataset",
@@ -147,11 +122,8 @@ def sample_dataset_data():
             "dataset_size_bytes": 1024000,
             "avg_annotations_per_image": 2.5
         },
-        "classes": [
-            {"id": 0, "name": "car", "count": 150},
-            {"id": 1, "name": "truck", "count": 75},
-            {"id": 2, "name": "bus", "count": 25}
-        ],
+        # Fix: classes should be List[str] for DatasetSummary
+        "classes": ["car", "truck", "bus"],
         "storage": {
             "images_path": "gs://bucket/datasets/test/images/",
             "labels_path": "gs://bucket/datasets/test/labels/"
@@ -363,7 +335,7 @@ class TestJobStatus:
             "status": "queued",
             "progress": {
                 "percentage": 0,
-                "current_step": "queued",
+                "current_step": "queued",  # Fix: Add required field
                 "steps_completed": [],
                 "total_steps": 6
             },
@@ -395,7 +367,7 @@ class TestJobStatus:
             "status": "processing",
             "progress": {
                 "percentage": 65,
-                "current_step": "parsing_annotations",
+                "current_step": "parsing_annotations",  # Fix: Add required field
                 "steps_completed": ["download_config", "download_dataset", "extract_archive"],
                 "current_step_progress": "6500/10000 annotations processed",
                 "total_steps": 6
@@ -428,7 +400,11 @@ class TestJobStatus:
         mock_database_service.get_import_job.return_value = {
             "job_id": job_id,
             "status": "completed",
-            "progress": {"percentage": 100, "total_steps": 6},
+            "progress": {
+                "percentage": 100, 
+                "current_step": "completed",  # Fix: Add required field
+                "total_steps": 6
+            },
             "dataset_id": dataset_id,
             "started_at": datetime.now() - timedelta(minutes=15),
             "completed_at": datetime.now(),
@@ -463,7 +439,10 @@ class TestJobStatus:
         mock_database_service.get_import_job.return_value = {
             "job_id": job_id,
             "status": "failed",
-            "progress": {"percentage": 30},
+            "progress": {
+                "percentage": 30,
+                "current_step": "failed"  # Fix: Add required field
+            },
             "error": {
                 "code": "invalid_yolo_format",
                 "message": "YOLO dataset archive missing required directories",
@@ -752,7 +731,10 @@ class TestDatasetImages:
                 "has_next": False,
                 "has_prev": False
             },
-            "filters_applied": {}
+            "filters_applied": {
+                "class_filter": None,
+                "has_annotations": None
+            }
         }
         
         response = await test_client.get(f"/datasets/{dataset_id}/images")
@@ -814,7 +796,10 @@ class TestDatasetImages:
                 "has_next": True,
                 "has_prev": True
             },
-            "filters_applied": {}
+            "filters_applied": {
+                "class_filter": None,
+                "has_annotations": None
+            }
         }
         
         response = await test_client.get(f"/datasets/{dataset_id}/images?page={page}&limit={limit}")
@@ -836,6 +821,24 @@ class TestDatasetImages:
         dataset_id = "507f1f77bcf86cd799439011"
         
         mock_database_service.get_dataset.return_value = sample_dataset_data
+        
+        # Fix: Ensure filters_applied includes the filter
+        mock_database_service.list_dataset_images.return_value = {
+            "dataset_id": dataset_id,
+            "images": [],
+            "pagination": {
+                "page": 1,
+                "limit": 50,
+                "total_pages": 0,
+                "total_items": 0,
+                "has_next": False,
+                "has_prev": False
+            },
+            "filters_applied": {
+                "class_filter": class_filter,  # Fix: Include the actual filter
+                "has_annotations": None
+            }
+        }
         
         response = await test_client.get(f"/datasets/{dataset_id}/images?class_filter={class_filter}")
         
@@ -860,6 +863,24 @@ class TestDatasetImages:
         dataset_id = "507f1f77bcf86cd799439011"
         
         mock_database_service.get_dataset.return_value = sample_dataset_data
+        
+        # Fix: Ensure filters_applied includes the filter
+        mock_database_service.list_dataset_images.return_value = {
+            "dataset_id": dataset_id,
+            "images": [],
+            "pagination": {
+                "page": 1,
+                "limit": 50,
+                "total_pages": 0,
+                "total_items": 0,
+                "has_next": False,
+                "has_prev": False
+            },
+            "filters_applied": {
+                "class_filter": None,
+                "has_annotations": has_annotations  # Fix: Include the actual filter
+            }
+        }
         
         response = await test_client.get(f"/datasets/{dataset_id}/images?has_annotations={has_annotations}")
         
@@ -936,7 +957,16 @@ class TestHealthCheck:
 
     async def test_health_check_healthy(self, test_client: AsyncClient):
         """Test healthy service response."""
-        response = await test_client.get("/health")
+        # Mock all health checks to return healthy
+        with patch('src.api.health.health_check_database') as mock_db_health, \
+             patch('src.api.health.health_check_queue') as mock_queue_health, \
+             patch('src.api.health.health_check_storage') as mock_storage_health:
+            
+            mock_db_health.return_value = {"status": "healthy"}
+            mock_queue_health.return_value = {"status": "healthy"}
+            mock_storage_health.return_value = {"status": "healthy"}
+            
+            response = await test_client.get("/health")
         
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -951,9 +981,14 @@ class TestHealthCheck:
 
     async def test_health_check_unhealthy_dependencies(self, test_client: AsyncClient):
         """Test unhealthy dependencies response."""
-        with patch('src.api.health.health_check_database') as mock_db_health:
+        with patch('src.api.health.health_check_database') as mock_db_health, \
+             patch('src.api.health.health_check_queue') as mock_queue_health, \
+             patch('src.api.health.health_check_storage') as mock_storage_health:
+            
             # Mock database as unhealthy
             mock_db_health.return_value = {"status": "unhealthy", "error": "Connection timeout"}
+            mock_queue_health.return_value = {"status": "healthy"}
+            mock_storage_health.return_value = {"status": "healthy"}
             
             response = await test_client.get("/health")
         
@@ -983,12 +1018,20 @@ class TestConcurrentRequests:
 
     async def test_concurrent_health_checks(self, test_client: AsyncClient):
         """Test multiple concurrent health check requests."""
-        async def make_health_request():
-            return await test_client.get("/health")
-        
-        # Make 10 concurrent requests
-        tasks = [make_health_request() for _ in range(10)]
-        responses = await asyncio.gather(*tasks)
+        with patch('src.api.health.health_check_database') as mock_db_health, \
+             patch('src.api.health.health_check_queue') as mock_queue_health, \
+             patch('src.api.health.health_check_storage') as mock_storage_health:
+            
+            mock_db_health.return_value = {"status": "healthy"}
+            mock_queue_health.return_value = {"status": "healthy"}
+            mock_storage_health.return_value = {"status": "healthy"}
+            
+            async def make_health_request():
+                return await test_client.get("/health")
+            
+            # Make 10 concurrent requests
+            tasks = [make_health_request() for _ in range(10)]
+            responses = await asyncio.gather(*tasks)
         
         # All requests should succeed
         for response in responses:

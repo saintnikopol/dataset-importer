@@ -71,7 +71,7 @@ def sample_yolo_annotation_lines() -> str:
 
 @pytest.fixture
 def sample_dataset_data() -> Dict[str, Any]:
-    """Sample dataset response data."""
+    """Sample dataset response data with correct structure."""
     return {
         "id": "507f1f77bcf86cd799439011",
         "name": "Test Traffic Dataset",
@@ -87,11 +87,8 @@ def sample_dataset_data() -> Dict[str, Any]:
             "dataset_size_bytes": 1024000,
             "avg_annotations_per_image": 2.5
         },
-        "classes": [
-            {"id": 0, "name": "car", "count": 150},
-            {"id": 1, "name": "truck", "count": 75},
-            {"id": 2, "name": "bus", "count": 25}
-        ],
+        # Fixed: DatasetSummary.classes expects List[str], not List[Dict]
+        "classes": ["car", "truck", "bus"],
         "storage": {
             "images_path": "gs://bucket/datasets/test/images/",
             "labels_path": "gs://bucket/datasets/test/labels/"
@@ -156,6 +153,79 @@ def sample_image_data() -> list:
             "annotation_count": 2
         }
     ]
+
+
+@pytest.fixture
+def sample_job_progress_queued() -> Dict[str, Any]:
+    """Sample job progress data for queued status."""
+    return {
+        "percentage": 0,
+        "current_step": "queued",
+        "steps_completed": [],
+        "total_steps": 6
+    }
+
+
+@pytest.fixture
+def sample_job_progress_processing() -> Dict[str, Any]:
+    """Sample job progress data for processing status."""
+    return {
+        "percentage": 65,
+        "current_step": "parsing_annotations",
+        "steps_completed": ["download_config", "download_dataset", "extract_archive"],
+        "current_step_progress": "6500/10000 annotations processed",
+        "total_steps": 6
+    }
+
+
+@pytest.fixture
+def sample_job_progress_completed() -> Dict[str, Any]:
+    """Sample job progress data for completed status."""
+    return {
+        "percentage": 100,
+        "current_step": "completed",
+        "steps_completed": [
+            "download_config", 
+            "download_dataset", 
+            "extract_archive", 
+            "parse_annotations", 
+            "process_images", 
+            "store_data"
+        ],
+        "total_steps": 6
+    }
+
+
+@pytest.fixture
+def sample_job_progress_failed() -> Dict[str, Any]:
+    """Sample job progress data for failed status."""
+    return {
+        "percentage": 30,
+        "current_step": "failed",
+        "steps_completed": ["download_config", "download_dataset"],
+        "total_steps": 6
+    }
+
+
+# Health check mock responses
+@pytest.fixture
+def healthy_dependencies():
+    """Mock responses for healthy dependencies."""
+    return {
+        "database": {"status": "healthy", "mongodb_version": "7.0.0"},
+        "queue": {"status": "healthy", "queue_type": "celery_redis"},
+        "storage": {"status": "healthy", "storage_type": "local"}
+    }
+
+
+@pytest.fixture
+def unhealthy_dependencies():
+    """Mock responses for unhealthy dependencies."""
+    return {
+        "database": {"status": "unhealthy", "error": "Connection timeout"},
+        "queue": {"status": "healthy", "queue_type": "celery_redis"},
+        "storage": {"status": "healthy", "storage_type": "local"}
+    }
 
 
 # Database Cleanup - Simple Version
