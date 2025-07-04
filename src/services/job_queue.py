@@ -58,9 +58,17 @@ class LocalJobQueue(JobQueue):
         try:
             logger.info(f"Enqueueing import job {job_id} to Celery")
             
-            # Enqueue the task
-            result = self.task.delay(job_id, data)
+            # # Enqueue the task
+            # Need to map keys like production does
+            mapped_data = {
+                "name": data.get("name"),
+                "description": data.get("description"), 
+                "config_url": data.get("yolo_config_url"),      # ← Add key mapping
+                "annotations_url": data.get("annotations_url"),
+                "images_url": data.get("images_url")
+            }
             
+            result = self.task.delay(job_id, mapped_data)  # ← Use mapped data
             logger.info(f"Successfully enqueued job {job_id} with task ID: {result.id}")
             
         except Exception as e:

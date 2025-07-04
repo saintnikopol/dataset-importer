@@ -45,7 +45,7 @@ async def import_dataset(
                 "steps_completed": [],
                 "total_steps": 5
             },
-            "request": request.dict(),
+            "request": request.model_dump(mode="json"),
             "created_at": datetime.utcnow(),
             "estimated_completion": datetime.utcnow() + timedelta(minutes=30)
         }
@@ -54,7 +54,7 @@ async def import_dataset(
         
         # Enqueue background processing job
         job_queue = get_job_queue()
-        await job_queue.enqueue_import_job(job_id, request.dict())
+        await job_queue.enqueue_import_job(job_id, request.model_dump(mode="json"))
         
         # Return response
         response = {

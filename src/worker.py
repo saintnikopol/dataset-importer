@@ -76,7 +76,7 @@ else:
         """Cloud Run Jobs endpoint for processing dataset import."""
         try:
             logger.info(f"Starting import job {data.job_id}")
-            await process_dataset_import(data.job_id, data.dict())
+            await process_dataset_import(data.job_id, data.model_dump())
             logger.info(f"Completed import job {data.job_id}")
             return {"status": "completed", "job_id": data.job_id}
         except Exception as e:
